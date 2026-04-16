@@ -1,36 +1,32 @@
 # selenwright-browsers
 
-Docker images of Playwright browsers for [Selenwright](https://github.com/aqa-alex/selenwright). Each browser is available in two variants: with VNC (for visual debugging) and without (lightweight headless).
+Docker images of Playwright browsers for [Selenwright](https://github.com/aqa-alex/selenwright). One image per browser, two modes via environment variables: headless for CI, headed + VNC for debugging.
 
 ## Images
 
-| Directory | Browser | VNC | Headless | Ports |
-|---|---|---|---|---|
-| `playwright-chromium-vnc` | Chromium | yes | no | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
-| `playwright-firefox-vnc` | Firefox | yes | no | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
-| `playwright-webkit-vnc` | WebKit | yes | no | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
-| `playwright-chromium-novnc` | Chromium | no | yes | 3000 (WS) |
-| `playwright-firefox-novnc` | Firefox | no | yes | 3000 (WS) |
-| `playwright-webkit-novnc` | WebKit | no | yes | 3000 (WS) |
+| Directory | Browser | Ports |
+|---|---|---|
+| `playwright-chromium` | Chromium | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
+| `playwright-firefox` | Firefox | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
+| `playwright-webkit` | WebKit | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
 
 ## Build
 
 ```bash
-docker build -t playwright-chromium-vnc playwright-chromium-vnc/
-docker build -t playwright-chromium-novnc playwright-chromium-novnc/
+docker build -t playwright-chromium playwright-chromium/
 
 # Specific Playwright version:
-docker build --build-arg PLAYWRIGHT_VERSION=1.56.1 -t playwright-chromium-novnc playwright-chromium-novnc/
+docker build --build-arg PLAYWRIGHT_VERSION=1.56.1 -t playwright-chromium playwright-chromium/
 ```
 
 ## Run
 
 ```bash
-# headless (no VNC)
-docker run -d -p 3000:3000 playwright-chromium-novnc
+# CI — headless, no VNC
+docker run -d -p 3000:3000 -e PW_HEADLESS=true -e ENABLE_VNC=false playwright-chromium
 
-# with VNC — connect with a VNC client on port 5900
-docker run -d -p 3000:3000 -p 5900:5900 playwright-chromium-vnc
+# Debug — headed + VNC, connect with a VNC client on port 5900
+docker run -d -p 3000:3000 -p 5900:5900 -e PW_HEADLESS=false -e ENABLE_VNC=true playwright-chromium
 ```
 
 ## Connect from code
@@ -50,12 +46,6 @@ await page.goto("https://example.com");
 | `PW_HOST` | `0.0.0.0` | Playwright server host |
 | `PW_PORT` | `3000` | Playwright server port |
 | `PW_PATH` | `/` | WebSocket path |
-| `PW_HEADLESS` | `true` (novnc) / `false` (vnc) | Browser mode |
-| `SCREEN_RESOLUTION` | `1920x1080x24` | Virtual screen resolution (vnc only) |
-| `ENABLE_VNC` | `true` | Enable x11vnc (vnc only) |
-
-## VNC vs No-VNC
-
-**VNC** — full virtual display stack: Xvfb + fluxbox (WM) + x11vnc + clipboard service. The browser renders to a virtual screen accessible via any VNC client. Best for debugging and visual inspection.
-
-**No-VNC** — Playwright server only, headless mode. No X11, no window manager, no VNC. Lighter, faster startup, lower resource usage. Best for CI/CD and production.
+| `PW_HEADLESS` | `false` | Headless mode (`true` for CI, `false` for debug) |
+| `SCREEN_RESOLUTION` | `1920x1080x24` | Virtual screen resolution |
+| `ENABLE_VNC` | `true` | Start x11vnc server (`false` to skip in CI) |
