@@ -46,10 +46,27 @@ terminate_pid() {
 
 cleanup() {
   terminate_pid "${app_pid:-}"
+  terminate_pid "${capture_pid:-}"
   terminate_pid "${clipboard_pid:-}"
   terminate_pid "${vnc_pid:-}"
   terminate_pid "${wm_pid:-}"
   terminate_pid "${xvfb_pid:-}"
+}
+
+capture_downloads() {
+  local src_dir="${PW_DOWNLOADS_PATH:-}"
+  local dst_dir="${SELENWRIGHT_DOWNLOADS_DIR:-}"
+  if [[ -z "${src_dir}" || -z "${dst_dir}" ]]; then
+    return 0
+  fi
+  mkdir -p "${dst_dir}"
+  inotifywait -m -q -e close_write -e moved_to --format '%f' "${src_dir}" | while read -r name; do
+    [[ -n "${name}" ]] || continue
+    # Skip Chromium's atomic-write temp files (".org.chromium.Chromium.XXX") —
+    # they get renamed to the final UUID on moved_to, which we will hardlink.
+    [[ "${name}" == .* ]] && continue
+    ln -f "${src_dir}/${name}" "${dst_dir}/${name}" 2>/dev/null || true
+  done
 }
 
 trap cleanup EXIT
@@ -77,6 +94,11 @@ fi
 
 node /opt/playwright/clipboard.cjs >/tmp/clipboard.log 2>&1 &
 clipboard_pid=$!
+
+if [[ -n "${PW_DOWNLOADS_PATH:-}" && -n "${SELENWRIGHT_DOWNLOADS_DIR:-}" ]]; then
+  capture_downloads >/tmp/capture.log 2>&1 &
+  capture_pid=$!
+fi
 
 "$@" &
 app_pid=$!

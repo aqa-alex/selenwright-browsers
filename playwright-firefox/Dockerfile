@@ -9,14 +9,12 @@ ENV PW_HOST=0.0.0.0 \
     PW_HEADLESS=false \
     DISPLAY=:99 \
     DISPLAY_NUM=99
-# Intentionally NOT setting SCREEN_RESOLUTION or ENABLE_VNC here — Selenwright
-# always passes them per-container, so any value hardcoded at image level would
-# be silently overridden. Defaults for standalone runs live in entrypoint.sh.
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     dumb-init \
     fluxbox \
+    inotify-tools \
     netcat-openbsd \
     x11-utils \
     x11vnc \
@@ -27,8 +25,8 @@ RUN apt-get update \
 
 RUN mkdir -p /opt/playwright /tmp/.X11-unix \
  && chmod 1777 /tmp/.X11-unix \
- && mkdir -p /home/pwuser/Downloads \
- && chown pwuser:pwuser /home/pwuser/Downloads
+ && mkdir -p /home/pwuser/Downloads /home/pwuser/Captures \
+ && chown pwuser:pwuser /home/pwuser/Downloads /home/pwuser/Captures
 
 COPY --chown=pwuser:pwuser server.cjs /opt/playwright/server.cjs
 COPY --chown=pwuser:pwuser clipboard.cjs /opt/playwright/clipboard.cjs
@@ -47,7 +45,7 @@ LABEL io.selenwright.browser="firefox" \
       io.selenwright.protocol="playwright" \
       io.selenwright.default="false" \
       io.selenwright.tmpfs='{"/tmp":"size=512m"}' \
-      io.selenwright.env='["SELENWRIGHT_DOWNLOADS_DIR=/home/pwuser/Downloads"]'
+      io.selenwright.env='["PW_DOWNLOADS_PATH=/home/pwuser/Downloads","SELENWRIGHT_DOWNLOADS_DIR=/home/pwuser/Captures"]'
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
   CMD nc -z 127.0.0.1 3000

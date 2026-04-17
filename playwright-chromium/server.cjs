@@ -86,7 +86,7 @@ async function main() {
     launchOptions.executablePath = executablePath;
   }
 
-  const downloadsPath = process.env.SELENWRIGHT_DOWNLOADS_DIR || "";
+  const downloadsPath = process.env.PW_DOWNLOADS_PATH || "";
   if (downloadsPath) {
     launchOptions.downloadsPath = downloadsPath;
   }
