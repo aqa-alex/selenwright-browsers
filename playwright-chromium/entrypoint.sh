@@ -62,9 +62,9 @@ capture_downloads() {
   mkdir -p "${dst_dir}"
   inotifywait -m -q -e close_write -e moved_to --format '%f' "${src_dir}" | while read -r name; do
     [[ -n "${name}" ]] || continue
-    # Skip Chromium's atomic-write temp files (".org.chromium.Chromium.XXX") —
-    # they get renamed to the final UUID on moved_to, which we will hardlink.
     [[ "${name}" == .* ]] && continue
+    [[ "${name}" == *.crdownload ]] && continue
+    [[ "${name}" == *.part ]] && continue
     ln -f "${src_dir}/${name}" "${dst_dir}/${name}" 2>/dev/null || true
   done
 }
