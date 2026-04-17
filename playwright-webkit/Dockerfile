@@ -26,7 +26,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /opt/playwright /tmp/.X11-unix \
- && chmod 1777 /tmp/.X11-unix
+ && chmod 1777 /tmp/.X11-unix \
+ && mkdir -p /home/pwuser/Downloads \
+ && chown pwuser:pwuser /home/pwuser/Downloads
 
 COPY --chown=pwuser:pwuser server.cjs /opt/playwright/server.cjs
 COPY --chown=pwuser:pwuser clipboard.cjs /opt/playwright/clipboard.cjs
@@ -37,6 +39,15 @@ RUN chmod +x /opt/playwright/entrypoint.sh
 USER pwuser
 
 EXPOSE 3000 5900 9090
+
+LABEL io.selenwright.browser="webkit" \
+      io.selenwright.version="1.56.1" \
+      io.selenwright.port="3000" \
+      io.selenwright.path="/" \
+      io.selenwright.protocol="playwright" \
+      io.selenwright.default="true" \
+      io.selenwright.tmpfs='{"/tmp":"size=512m"}' \
+      io.selenwright.env='["SELENWRIGHT_DOWNLOADS_DIR=/home/pwuser/Downloads"]'
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
   CMD nc -z 127.0.0.1 3000

@@ -58,6 +58,11 @@ async function main() {
     launchOptions.executablePath = executablePath;
   }
 
+  const downloadsPath = process.env.SELENWRIGHT_DOWNLOADS_DIR || "";
+  if (downloadsPath) {
+    launchOptions.downloadsPath = downloadsPath;
+  }
+
   const server = await webkit.launchServer(launchOptions);
 
   console.log(
