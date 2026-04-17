@@ -3,16 +3,44 @@ name: Build and push Docker images
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.versions.outputs.versions }}
+      latest: ${{ steps.versions.outputs.latest }}
+    steps:
+      - id: versions
+        run: |
+          set -euo pipefail
+          VERSIONS_JSON=$(npm view playwright-core versions --json)
+          STABLE=$(echo "$VERSIONS_JSON" | jq -r '.[] | select(test("^[0-9]+[.][0-9]+[.][0-9]+$"))')
+          MINORS=$(echo "$STABLE" | awk -F. '{print $1"."$2}' | sort -Vu)
+          TOP=$(echo "$MINORS" | tail -2)
+          LATEST_MINOR=$(echo "$TOP" | tail -1)
+          PREV_MINOR=$(echo "$TOP" | head -1)
+          LATEST=$(echo "$STABLE" | grep "^${LATEST_MINOR}\." | sort -V | tail -1)
+          PREV=$(echo "$STABLE" | grep "^${PREV_MINOR}\." | sort -V | tail -1)
+          ARR=$(jq -nc --arg l "$LATEST" --arg p "$PREV" '[$l, $p]')
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "versions=$ARR" >> "$GITHUB_OUTPUT"
+          echo "Will build: latest=$LATEST, previous=$PREV"
+
   build-and-push:
+    needs: discover
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         image:
           - playwright-chromium
           - playwright-firefox
           - playwright-webkit
+        version: ${{ fromJson(needs.discover.outputs.versions) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +51,83 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - id: tags
+        env:
+          IMAGE: selenwright/${{ matrix.image }}
+          VERSION: ${{ matrix.version }}
+          LATEST: ${{ needs.discover.outputs.latest }}
+        run: |
+          set -euo pipefail
+          MINOR="${VERSION%.*}"
+          TAGS="${IMAGE}:${VERSION},${IMAGE}:${MINOR}"
+          if [ "${VERSION}" = "${LATEST}" ]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.image }}
           push: true
-          tags: selenwright/${{ matrix.image }}:latest
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            PLAYWRIGHT_VERSION=${{ matrix.version }}
+
+  cleanup:
+    needs: [discover, build-and-push]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - playwright-chromium
+          - playwright-firefox
+          - playwright-webkit
+    steps:
+      - name: Prune old tags from Docker Hub
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          NAMESPACE: selenwright
+          REPO: ${{ matrix.image }}
+          VERSIONS: ${{ needs.discover.outputs.versions }}
+        run: |
+          set -euo pipefail
+
+          KEEP_VERSIONS=$(echo "$VERSIONS" | jq -r '.[]')
+          if [ -z "$KEEP_VERSIONS" ]; then
+            echo "Keep set is empty — aborting to avoid wiping the repo"
+            exit 1
+          fi
+          KEEP_MINORS=$(echo "$KEEP_VERSIONS" | awk -F. '{print $1"."$2}')
+          KEEP=$(printf '%s\n%s\nlatest\n' "$KEEP_VERSIONS" "$KEEP_MINORS" | sort -u)
+          echo "Keeping:"
+          echo "$KEEP" | sed 's/^/  /'
+
+          JWT=$(curl -fsS -X POST -H "Content-Type: application/json" \
+            -d "{\"username\":\"${USERNAME}\",\"password\":\"${TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+            echo "Failed to authenticate with Docker Hub"
+            exit 1
+          fi
+
+          URL="https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/?page_size=100"
+          ALL_TAGS=""
+          while [ -n "$URL" ] && [ "$URL" != "null" ]; do
+            RESP=$(curl -fsS -H "Authorization: JWT ${JWT}" "$URL")
+            PAGE_TAGS=$(echo "$RESP" | jq -r '.results[].name')
+            ALL_TAGS="${ALL_TAGS}${PAGE_TAGS}"$'\n'
+            URL=$(echo "$RESP" | jq -r '.next')
+          done
+
+          echo "$ALL_TAGS" | grep -v '^$' | sort -u | while read -r TAG; do
+            if echo "$KEEP" | grep -qx "$TAG"; then
+              echo "keep   $TAG"
+            else
+              CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+                -X DELETE -H "Authorization: JWT ${JWT}" \
+                "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/${TAG}/")
+              echo "delete $TAG (HTTP $CODE)"
+            fi
+          done

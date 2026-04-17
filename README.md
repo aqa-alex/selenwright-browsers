@@ -16,7 +16,7 @@ Docker images of Playwright browsers for [Selenwright](https://github.com/aqa-al
 docker build -t playwright-chromium playwright-chromium/
 
 # Specific Playwright version:
-docker build --build-arg PLAYWRIGHT_VERSION=1.56.1 -t playwright-chromium playwright-chromium/
+docker build --build-arg PLAYWRIGHT_VERSION=1.58.0 -t playwright-chromium playwright-chromium/
 ```
 
 ## Run

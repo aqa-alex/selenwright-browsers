@@ -1,4 +1,4 @@
-ARG PLAYWRIGHT_VERSION=1.56.1
+ARG PLAYWRIGHT_VERSION=1.58.0
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
@@ -39,7 +39,7 @@ USER pwuser
 EXPOSE 3000 5900 9090
 
 LABEL io.selenwright.browser="chromium" \
-      io.selenwright.version="1.56.1" \
+      io.selenwright.version="${PLAYWRIGHT_VERSION}" \
       io.selenwright.port="3000" \
       io.selenwright.path="/" \
       io.selenwright.protocol="playwright" \
