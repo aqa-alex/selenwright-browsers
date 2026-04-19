@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           MINOR="${VERSION%.*}"
-          TAGS="${IMAGE}:${VERSION},${IMAGE}:${MINOR}"
+          TAGS="${IMAGE}:${MINOR}"
           if [ "${VERSION}" = "${LATEST}" ]; then
             TAGS="${TAGS},${IMAGE}:latest"
           fi
@@ -100,7 +100,7 @@ jobs:
             exit 1
           fi
           KEEP_MINORS=$(echo "$KEEP_VERSIONS" | awk -F. '{print $1"."$2}')
-          KEEP=$(printf '%s\n%s\nlatest\n' "$KEEP_VERSIONS" "$KEEP_MINORS" | sort -u)
+          KEEP=$(printf '%s\nlatest\n' "$KEEP_MINORS" | sort -u)
           echo "Keeping:"
           echo "$KEEP" | sed 's/^/  /'
 
