@@ -95,7 +95,7 @@ jobs:
 
   smoke-test:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.image.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,38 +104,44 @@ jobs:
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
           - name: playwright-chromium
             browser: chromium
             platform: linux/arm64
             platform_slug: linux-arm64
+            runner: ubuntu-24.04-arm
           - name: playwright-firefox
             browser: firefox
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
           - name: playwright-firefox
             browser: firefox
             platform: linux/arm64
             platform_slug: linux-arm64
+            runner: ubuntu-24.04-arm
           - name: playwright-webkit
             browser: webkit
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
           - name: playwright-webkit
             browser: webkit
             platform: linux/arm64
             platform_slug: linux-arm64
+            runner: ubuntu-24.04-arm
           - name: playwright-chrome
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
           - name: playwright-msedge
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
