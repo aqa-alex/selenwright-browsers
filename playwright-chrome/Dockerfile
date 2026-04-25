@@ -37,6 +37,7 @@ RUN mkdir -p /opt/playwright /tmp/.X11-unix \
 
 COPY --chown=pwuser:pwuser shared/server.cjs /opt/playwright/server.cjs
 COPY --chown=pwuser:pwuser shared/clipboard.cjs /opt/playwright/clipboard.cjs
+COPY --chown=pwuser:pwuser shared/common.sh /opt/playwright/common.sh
 COPY --chown=pwuser:pwuser shared/entrypoint.sh /opt/playwright/entrypoint.sh
 
 RUN chmod +x /opt/playwright/entrypoint.sh

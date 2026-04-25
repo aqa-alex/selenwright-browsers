@@ -8,58 +8,47 @@ ARG VCS_REF
 ENV PW_HOST=0.0.0.0 \
     PW_PORT=3000 \
     PW_PATH=/ \
-    PW_HEADLESS=false \
-    PW_BROWSER_TYPE=chromium \
-    PW_BROWSER_NAME="Microsoft Edge" \
-    PW_BROWSER_CHANNEL=msedge \
-    PW_EXECUTABLE_PATH_ENV=PW_MSEDGE_EXECUTABLE_PATH \
-    DISPLAY=:99 \
-    DISPLAY_NUM=99
+    PW_HEADLESS=true \
+    PW_BROWSER_TYPE=webkit \
+    PW_BROWSER_NAME=WebKit \
+    PW_EXECUTABLE_PATH_ENV=PW_WEBKIT_EXECUTABLE_PATH
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     dumb-init \
-    fluxbox \
     inotify-tools \
     netcat-openbsd \
-    x11-utils \
-    x11vnc \
-    xclip \
-    xvfb \
  && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
- && npx playwright-core install --with-deps msedge \
- && rm -rf /var/lib/apt/lists/* /root/.npm
+ && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/playwright /tmp/.X11-unix \
- && chmod 1777 /tmp/.X11-unix \
+RUN mkdir -p /opt/playwright \
  && mkdir -p /home/pwuser/Downloads /home/pwuser/Captures \
  && chown pwuser:pwuser /home/pwuser/Downloads /home/pwuser/Captures
 
 COPY --chown=pwuser:pwuser shared/server.cjs /opt/playwright/server.cjs
-COPY --chown=pwuser:pwuser shared/clipboard.cjs /opt/playwright/clipboard.cjs
 COPY --chown=pwuser:pwuser shared/common.sh /opt/playwright/common.sh
-COPY --chown=pwuser:pwuser shared/entrypoint.sh /opt/playwright/entrypoint.sh
+COPY --chown=pwuser:pwuser shared/entrypoint-headless.sh /opt/playwright/entrypoint.sh
 
 RUN chmod +x /opt/playwright/entrypoint.sh
 
 USER pwuser
 
-EXPOSE 3000 5900 9090
+EXPOSE 3000
 
-LABEL org.opencontainers.image.title="selenwright/playwright-msedge" \
-      org.opencontainers.image.description="Microsoft Edge Playwright browser image for Selenwright" \
+LABEL org.opencontainers.image.title="selenwright/playwright-webkit (headless)" \
+      org.opencontainers.image.description="WebKit Playwright browser image for Selenwright (headless)" \
       org.opencontainers.image.url="https://github.com/aqa-alex/selenwright-browsers" \
       org.opencontainers.image.source="https://github.com/aqa-alex/selenwright-browsers" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${PLAYWRIGHT_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      io.selenwright.browser="msedge" \
+      io.selenwright.browser="webkit" \
       io.selenwright.version="${PLAYWRIGHT_VERSION}" \
       io.selenwright.port="3000" \
       io.selenwright.path="/" \
       io.selenwright.protocol="playwright" \
-      io.selenwright.default="false" \
+      io.selenwright.default="true" \
       io.selenwright.tmpfs='{"/tmp":"size=512m"}' \
       io.selenwright.env='["PW_DOWNLOADS_PATH=/home/pwuser/Downloads","SELENWRIGHT_DOWNLOADS_DIR=/home/pwuser/Captures"]'
 

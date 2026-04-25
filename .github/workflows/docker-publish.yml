@@ -42,14 +42,44 @@ jobs:
       matrix:
         image:
           - name: playwright-chromium
+            dockerfile: playwright-chromium/Dockerfile
+            headless: false
             platforms: linux/amd64,linux/arm64
           - name: playwright-firefox
+            dockerfile: playwright-firefox/Dockerfile
+            headless: false
             platforms: linux/amd64,linux/arm64
           - name: playwright-webkit
+            dockerfile: playwright-webkit/Dockerfile
+            headless: false
             platforms: linux/amd64,linux/arm64
           - name: playwright-chrome
+            dockerfile: playwright-chrome/Dockerfile
+            headless: false
             platforms: linux/amd64
           - name: playwright-msedge
+            dockerfile: playwright-msedge/Dockerfile
+            headless: false
+            platforms: linux/amd64
+          - name: playwright-chromium
+            dockerfile: playwright-chromium/Dockerfile.headless
+            headless: true
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-firefox
+            dockerfile: playwright-firefox/Dockerfile.headless
+            headless: true
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-webkit
+            dockerfile: playwright-webkit/Dockerfile.headless
+            headless: true
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-chrome
+            dockerfile: playwright-chrome/Dockerfile.headless
+            headless: true
+            platforms: linux/amd64
+          - name: playwright-msedge
+            dockerfile: playwright-msedge/Dockerfile.headless
+            headless: true
             platforms: linux/amd64
         version: ${{ fromJson(needs.discover.outputs.versions) }}
     steps:
@@ -72,19 +102,22 @@ jobs:
           IMAGE: selenwright/${{ matrix.image.name }}
           VERSION: ${{ matrix.version }}
           LATEST: ${{ needs.discover.outputs.latest }}
+          HEADLESS: ${{ matrix.image.headless }}
         run: |
           set -euo pipefail
+          SUFFIX=""
+          if [ "${HEADLESS}" = "true" ]; then SUFFIX="-headless"; fi
           MINOR="${VERSION%.*}"
-          TAGS="${IMAGE}:${VERSION},${IMAGE}:${MINOR}"
+          TAGS="${IMAGE}:${VERSION}${SUFFIX},${IMAGE}:${MINOR}${SUFFIX}"
           if [ "${VERSION}" = "${LATEST}" ]; then
-            TAGS="${TAGS},${IMAGE}:latest,${IMAGE}:latest-release"
+            TAGS="${TAGS},${IMAGE}:latest${SUFFIX},${IMAGE}:latest-release${SUFFIX}"
           fi
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.image.name }}/Dockerfile
+          file: ${{ matrix.image.dockerfile }}
           platforms: ${{ matrix.image.platforms }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -101,44 +134,95 @@ jobs:
       matrix:
         image:
           - name: playwright-chromium
+            dockerfile: playwright-chromium/Dockerfile
+            headless: false
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
             runner: ubuntu-latest
           - name: playwright-chromium
+            dockerfile: playwright-chromium/Dockerfile
+            headless: false
             browser: chromium
             platform: linux/arm64
             platform_slug: linux-arm64
             runner: ubuntu-24.04-arm
           - name: playwright-firefox
+            dockerfile: playwright-firefox/Dockerfile
+            headless: false
             browser: firefox
             platform: linux/amd64
             platform_slug: linux-amd64
             runner: ubuntu-latest
           - name: playwright-firefox
+            dockerfile: playwright-firefox/Dockerfile
+            headless: false
             browser: firefox
             platform: linux/arm64
             platform_slug: linux-arm64
             runner: ubuntu-24.04-arm
           - name: playwright-webkit
+            dockerfile: playwright-webkit/Dockerfile
+            headless: false
             browser: webkit
             platform: linux/amd64
             platform_slug: linux-amd64
             runner: ubuntu-latest
           - name: playwright-webkit
+            dockerfile: playwright-webkit/Dockerfile
+            headless: false
             browser: webkit
             platform: linux/arm64
             platform_slug: linux-arm64
             runner: ubuntu-24.04-arm
           - name: playwright-chrome
+            dockerfile: playwright-chrome/Dockerfile
+            headless: false
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
             runner: ubuntu-latest
           - name: playwright-msedge
+            dockerfile: playwright-msedge/Dockerfile
+            headless: false
             browser: chromium
             platform: linux/amd64
             platform_slug: linux-amd64
+            runner: ubuntu-latest
+          - name: playwright-chromium
+            dockerfile: playwright-chromium/Dockerfile.headless
+            headless: true
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64-headless
+            runner: ubuntu-latest
+          - name: playwright-firefox
+            dockerfile: playwright-firefox/Dockerfile.headless
+            headless: true
+            browser: firefox
+            platform: linux/amd64
+            platform_slug: linux-amd64-headless
+            runner: ubuntu-latest
+          - name: playwright-webkit
+            dockerfile: playwright-webkit/Dockerfile.headless
+            headless: true
+            browser: webkit
+            platform: linux/amd64
+            platform_slug: linux-amd64-headless
+            runner: ubuntu-latest
+          - name: playwright-chrome
+            dockerfile: playwright-chrome/Dockerfile.headless
+            headless: true
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64-headless
+            runner: ubuntu-latest
+          - name: playwright-msedge
+            dockerfile: playwright-msedge/Dockerfile.headless
+            headless: true
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64-headless
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,7 +235,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.image.name }}/Dockerfile
+          file: ${{ matrix.image.dockerfile }}
           platforms: ${{ matrix.image.platform }}
           load: true
           tags: selenwright-smoke/${{ matrix.image.name }}:${{ matrix.image.platform_slug }}
@@ -166,19 +250,25 @@ jobs:
           IMAGE: selenwright-smoke/${{ matrix.image.name }}:${{ matrix.image.platform_slug }}
           PLATFORM: ${{ matrix.image.platform }}
           VERSION: ${{ needs.discover.outputs.latest }}
+          HEADLESS: ${{ matrix.image.headless }}
         run: |
           set -euo pipefail
 
           npm install --no-save --no-package-lock "playwright-core@${VERSION}"
 
+          EXTRA_PORTS=""
+          if [ "${HEADLESS}" != "true" ]; then
+            EXTRA_PORTS="-p 127.0.0.1:9090:9090"
+          fi
+
           docker run -d --name selenwright-smoke \
             --platform "${PLATFORM}" \
             -p 127.0.0.1:3000:3000 \
-            -p 127.0.0.1:9090:9090 \
+            ${EXTRA_PORTS} \
             -e PW_HEADLESS=true \
             -e ENABLE_VNC=false \
             "${IMAGE}"
-          trap 'docker logs selenwright-smoke || true; docker exec selenwright-smoke sh -lc "cat /tmp/clipboard.log /tmp/fluxbox.log /tmp/x11vnc.log 2>/dev/null || true" || true; docker rm -f selenwright-smoke || true' EXIT
+          trap 'docker logs selenwright-smoke || true; docker exec selenwright-smoke sh -lc "cat /tmp/clipboard.log /tmp/fluxbox.log /tmp/x11vnc.log /tmp/capture.log 2>/dev/null || true" || true; docker rm -f selenwright-smoke || true' EXIT
 
           for attempt in $(seq 1 60); do
             status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke 2>/dev/null || true)
@@ -191,16 +281,18 @@ jobs:
           status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke)
           test "$status" = "healthy"
 
-          clipboard_ready=false
-          for attempt in $(seq 1 30); do
-            if printf 'selenwright-smoke' | curl -fsS -X POST --data-binary @- http://127.0.0.1:9090/ >/dev/null 2>&1 \
-              && [ "$(curl -fsS http://127.0.0.1:9090/ 2>/dev/null)" = "selenwright-smoke" ]; then
-              clipboard_ready=true
-              break
-            fi
-            sleep 1
-          done
-          test "$clipboard_ready" = "true"
+          if [ "${HEADLESS}" != "true" ]; then
+            clipboard_ready=false
+            for attempt in $(seq 1 30); do
+              if printf 'selenwright-smoke' | curl -fsS -X POST --data-binary @- http://127.0.0.1:9090/ >/dev/null 2>&1 \
+                && [ "$(curl -fsS http://127.0.0.1:9090/ 2>/dev/null)" = "selenwright-smoke" ]; then
+                clipboard_ready=true
+                break
+              fi
+              sleep 1
+            done
+            test "$clipboard_ready" = "true"
+          fi
 
           node - <<'NODE'
           const { chromium, firefox, webkit } = require("playwright-core");
@@ -254,7 +346,11 @@ jobs:
             exit 1
           fi
           KEEP_MINORS=$(echo "$KEEP_FULL_VERSIONS" | awk -F. '{print $1"."$2}')
-          KEEP=$(printf '%s\n%s\nlatest\nlatest-release\n' "$KEEP_FULL_VERSIONS" "$KEEP_MINORS" | sort -u)
+          KEEP_HEADLESS=$(printf '%s\n%s\nlatest-headless\nlatest-release-headless\n' \
+            "$(echo "$KEEP_FULL_VERSIONS" | sed 's/$/-headless/')" \
+            "$(echo "$KEEP_MINORS" | sed 's/$/-headless/')")
+          KEEP=$(printf '%s\n%s\nlatest\nlatest-release\n%s\n' \
+            "$KEEP_FULL_VERSIONS" "$KEEP_MINORS" "$KEEP_HEADLESS" | sort -u)
           echo "Keeping:"
           echo "$KEEP" | sed 's/^/  /'
 
@@ -275,7 +371,7 @@ jobs:
             URL=$(echo "$RESP" | jq -r '.next')
           done
 
-          MANAGED_TAG_PATTERN='^([0-9]+[.][0-9]+([.][0-9]+)?|latest|latest-release)$'
+          MANAGED_TAG_PATTERN='^([0-9]+[.][0-9]+([.][0-9]+)?|latest|latest-release)(-headless)?$'
 
           echo "$ALL_TAGS" | grep -v '^$' | sort -u | while read -r TAG; do
             if echo "$KEEP" | grep -qx "$TAG"; then
