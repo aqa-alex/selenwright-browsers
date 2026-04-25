@@ -3,9 +3,23 @@
 const http = require("node:http");
 const { spawn, spawnSync } = require("node:child_process");
 
-const PORT = Number.parseInt(process.env.CLIPBOARD_PORT || "9090", 10);
+function parseIntegerEnv(name, defaultValue, { min, max }) {
+  const raw = process.env[name] || String(defaultValue);
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be an integer`);
+  }
+
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be between ${min} and ${max}`);
+  }
+
+  return value;
+}
+
+const PORT = parseIntegerEnv("CLIPBOARD_PORT", 9090, { min: 1, max: 65535 });
 const HOST = process.env.CLIPBOARD_HOST || "0.0.0.0";
-const MAX_BYTES = Number.parseInt(process.env.CLIPBOARD_MAX_BYTES || "1048576", 10);
+const MAX_BYTES = parseIntegerEnv("CLIPBOARD_MAX_BYTES", 1048576, { min: 1, max: 104857600 });
 const SELECTION = process.env.CLIPBOARD_SELECTION || "clipboard";
 const DISPLAY = process.env.DISPLAY || ":99";
 const SPAWN_ENV = { ...process.env, DISPLAY };

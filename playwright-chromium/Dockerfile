@@ -3,10 +3,16 @@ FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
 
+ARG BUILD_DATE
+ARG VCS_REF
+
 ENV PW_HOST=0.0.0.0 \
     PW_PORT=3000 \
     PW_PATH=/ \
     PW_HEADLESS=false \
+    PW_BROWSER_TYPE=chromium \
+    PW_BROWSER_NAME=Chromium \
+    PW_EXECUTABLE_PATH_ENV=PW_CHROMIUM_EXECUTABLE_PATH \
     DISPLAY=:99 \
     DISPLAY_NUM=99
 
@@ -28,9 +34,9 @@ RUN mkdir -p /opt/playwright /tmp/.X11-unix \
  && mkdir -p /home/pwuser/Downloads /home/pwuser/Captures \
  && chown pwuser:pwuser /home/pwuser/Downloads /home/pwuser/Captures
 
-COPY --chown=pwuser:pwuser server.cjs /opt/playwright/server.cjs
-COPY --chown=pwuser:pwuser clipboard.cjs /opt/playwright/clipboard.cjs
-COPY --chown=pwuser:pwuser entrypoint.sh /opt/playwright/entrypoint.sh
+COPY --chown=pwuser:pwuser shared/server.cjs /opt/playwright/server.cjs
+COPY --chown=pwuser:pwuser shared/clipboard.cjs /opt/playwright/clipboard.cjs
+COPY --chown=pwuser:pwuser shared/entrypoint.sh /opt/playwright/entrypoint.sh
 
 RUN chmod +x /opt/playwright/entrypoint.sh
 
@@ -38,7 +44,15 @@ USER pwuser
 
 EXPOSE 3000 5900 9090
 
-LABEL io.selenwright.browser="chromium" \
+LABEL org.opencontainers.image.title="selenwright/playwright-chromium" \
+      org.opencontainers.image.description="Chromium Playwright browser image for Selenwright" \
+      org.opencontainers.image.url="https://github.com/aqa-alex/selenwright-browsers" \
+      org.opencontainers.image.source="https://github.com/aqa-alex/selenwright-browsers" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${PLAYWRIGHT_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      io.selenwright.browser="chromium" \
       io.selenwright.version="${PLAYWRIGHT_VERSION}" \
       io.selenwright.port="3000" \
       io.selenwright.path="/" \

@@ -7,6 +7,10 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   discover:
     runs-on: ubuntu-latest
@@ -31,18 +35,27 @@ jobs:
           echo "Will build: latest=$LATEST, previous=$PREV"
 
   build-and-push:
-    needs: discover
+    needs: [discover, smoke-test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         image:
-          - playwright-chromium
-          - playwright-firefox
-          - playwright-webkit
+          - name: playwright-chromium
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-firefox
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-webkit
+            platforms: linux/amd64,linux/arm64
+          - name: playwright-chrome
+            platforms: linux/amd64
+          - name: playwright-msedge
+            platforms: linux/amd64
         version: ${{ fromJson(needs.discover.outputs.versions) }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -51,27 +64,150 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - id: build-meta
+        run: echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       - id: tags
         env:
-          IMAGE: selenwright/${{ matrix.image }}
+          IMAGE: selenwright/${{ matrix.image.name }}
           VERSION: ${{ matrix.version }}
           LATEST: ${{ needs.discover.outputs.latest }}
         run: |
           set -euo pipefail
           MINOR="${VERSION%.*}"
-          TAGS="${IMAGE}:${MINOR}"
+          TAGS="${IMAGE}:${VERSION},${IMAGE}:${MINOR}"
           if [ "${VERSION}" = "${LATEST}" ]; then
-            TAGS="${TAGS},${IMAGE}:latest"
+            TAGS="${TAGS},${IMAGE}:latest,${IMAGE}:latest-release"
           fi
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image }}
+          context: .
+          file: ${{ matrix.image.name }}/Dockerfile
+          platforms: ${{ matrix.image.platforms }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
             PLAYWRIGHT_VERSION=${{ matrix.version }}
+            BUILD_DATE=${{ steps.build-meta.outputs.created }}
+            VCS_REF=${{ github.sha }}
+
+  smoke-test:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: playwright-chromium
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64
+          - name: playwright-chromium
+            browser: chromium
+            platform: linux/arm64
+            platform_slug: linux-arm64
+          - name: playwright-firefox
+            browser: firefox
+            platform: linux/amd64
+            platform_slug: linux-amd64
+          - name: playwright-firefox
+            browser: firefox
+            platform: linux/arm64
+            platform_slug: linux-arm64
+          - name: playwright-webkit
+            browser: webkit
+            platform: linux/amd64
+            platform_slug: linux-amd64
+          - name: playwright-webkit
+            browser: webkit
+            platform: linux/arm64
+            platform_slug: linux-arm64
+          - name: playwright-chrome
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64
+          - name: playwright-msedge
+            browser: chromium
+            platform: linux/amd64
+            platform_slug: linux-amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: build-meta
+        run: echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.name }}/Dockerfile
+          platforms: ${{ matrix.image.platform }}
+          load: true
+          tags: selenwright-smoke/${{ matrix.image.name }}:${{ matrix.image.platform_slug }}
+          build-args: |
+            PLAYWRIGHT_VERSION=${{ needs.discover.outputs.latest }}
+            BUILD_DATE=${{ steps.build-meta.outputs.created }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Run smoke test
+        env:
+          BROWSER_TYPE: ${{ matrix.image.browser }}
+          IMAGE: selenwright-smoke/${{ matrix.image.name }}:${{ matrix.image.platform_slug }}
+          VERSION: ${{ needs.discover.outputs.latest }}
+        run: |
+          set -euo pipefail
+
+          npm install --no-save --no-package-lock "playwright-core@${VERSION}"
+
+          docker run -d --name selenwright-smoke \
+            -p 127.0.0.1:3000:3000 \
+            -p 127.0.0.1:9090:9090 \
+            -e PW_HEADLESS=true \
+            -e ENABLE_VNC=false \
+            "${IMAGE}"
+          trap 'docker logs selenwright-smoke || true; docker rm -f selenwright-smoke || true' EXIT
+
+          for attempt in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke 2>/dev/null || true)
+            if [ "$status" = "healthy" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke)
+          test "$status" = "healthy"
+
+          printf 'selenwright-smoke' | curl -fsS -X POST --data-binary @- http://127.0.0.1:9090/
+          test "$(curl -fsS http://127.0.0.1:9090/)" = "selenwright-smoke"
+
+          node - <<'NODE'
+          const { chromium, firefox, webkit } = require("playwright-core");
+          const browsers = { chromium, firefox, webkit };
+          const browserType = browsers[process.env.BROWSER_TYPE];
+          if (!browserType) {
+            throw new Error(`Unsupported browser type: ${process.env.BROWSER_TYPE}`);
+          }
+
+          (async () => {
+            const browser = await browserType.connect("ws://127.0.0.1:3000/");
+            const page = await browser.newPage();
+            await page.setContent("<title>selenwright smoke</title><h1>ok</h1>");
+            const title = await page.title();
+            await browser.close();
+            if (title !== "selenwright smoke") {
+              throw new Error(`Unexpected page title: ${title}`);
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
 
   cleanup:
     needs: [discover, build-and-push]
@@ -83,6 +219,8 @@ jobs:
           - playwright-chromium
           - playwright-firefox
           - playwright-webkit
+          - playwright-chrome
+          - playwright-msedge
     steps:
       - name: Prune old tags from Docker Hub
         env:
@@ -94,13 +232,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          KEEP_VERSIONS=$(echo "$VERSIONS" | jq -r '.[]')
-          if [ -z "$KEEP_VERSIONS" ]; then
+          KEEP_FULL_VERSIONS=$(echo "$VERSIONS" | jq -r '.[]')
+          if [ -z "$KEEP_FULL_VERSIONS" ]; then
             echo "Keep set is empty — aborting to avoid wiping the repo"
             exit 1
           fi
-          KEEP_MINORS=$(echo "$KEEP_VERSIONS" | awk -F. '{print $1"."$2}')
-          KEEP=$(printf '%s\nlatest\n' "$KEEP_MINORS" | sort -u)
+          KEEP_MINORS=$(echo "$KEEP_FULL_VERSIONS" | awk -F. '{print $1"."$2}')
+          KEEP=$(printf '%s\n%s\nlatest\nlatest-release\n' "$KEEP_FULL_VERSIONS" "$KEEP_MINORS" | sort -u)
           echo "Keeping:"
           echo "$KEEP" | sed 's/^/  /'
 
@@ -121,9 +259,13 @@ jobs:
             URL=$(echo "$RESP" | jq -r '.next')
           done
 
+          MANAGED_TAG_PATTERN='^([0-9]+[.][0-9]+([.][0-9]+)?|latest|latest-release)$'
+
           echo "$ALL_TAGS" | grep -v '^$' | sort -u | while read -r TAG; do
             if echo "$KEEP" | grep -qx "$TAG"; then
               echo "keep   $TAG"
+            elif ! echo "$TAG" | grep -Eq "$MANAGED_TAG_PATTERN"; then
+              echo "skip   $TAG (unmanaged)"
             else
               CODE=$(curl -s -o /dev/null -w '%{http_code}' \
                 -X DELETE -H "Authorization: JWT ${JWT}" \

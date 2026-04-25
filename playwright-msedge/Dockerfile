@@ -2,7 +2,6 @@ ARG PLAYWRIGHT_VERSION=1.58.0
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
-
 ARG BUILD_DATE
 ARG VCS_REF
 
@@ -10,9 +9,10 @@ ENV PW_HOST=0.0.0.0 \
     PW_PORT=3000 \
     PW_PATH=/ \
     PW_HEADLESS=false \
-    PW_BROWSER_TYPE=firefox \
-    PW_BROWSER_NAME=Firefox \
-    PW_EXECUTABLE_PATH_ENV=PW_FIREFOX_EXECUTABLE_PATH \
+    PW_BROWSER_TYPE=chromium \
+    PW_BROWSER_NAME="Microsoft Edge" \
+    PW_BROWSER_CHANNEL=msedge \
+    PW_EXECUTABLE_PATH_ENV=PW_MSEDGE_EXECUTABLE_PATH \
     DISPLAY=:99 \
     DISPLAY_NUM=99
 
@@ -27,7 +27,8 @@ RUN apt-get update \
     xclip \
     xvfb \
  && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
- && rm -rf /var/lib/apt/lists/*
+ && npx playwright-core install --with-deps msedge \
+ && rm -rf /var/lib/apt/lists/* /root/.npm
 
 RUN mkdir -p /opt/playwright /tmp/.X11-unix \
  && chmod 1777 /tmp/.X11-unix \
@@ -44,15 +45,15 @@ USER pwuser
 
 EXPOSE 3000 5900 9090
 
-LABEL org.opencontainers.image.title="selenwright/playwright-firefox" \
-      org.opencontainers.image.description="Firefox Playwright browser image for Selenwright" \
+LABEL org.opencontainers.image.title="selenwright/playwright-msedge" \
+      org.opencontainers.image.description="Microsoft Edge Playwright browser image for Selenwright" \
       org.opencontainers.image.url="https://github.com/aqa-alex/selenwright-browsers" \
       org.opencontainers.image.source="https://github.com/aqa-alex/selenwright-browsers" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${PLAYWRIGHT_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      io.selenwright.browser="firefox" \
+      io.selenwright.browser="msedge" \
       io.selenwright.version="${PLAYWRIGHT_VERSION}" \
       io.selenwright.port="3000" \
       io.selenwright.path="/" \

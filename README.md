@@ -11,6 +11,18 @@ Published images are available on [Docker Hub under `selenwright`](https://hub.d
 | `playwright-chromium` | Chromium | [`selenwright/playwright-chromium`](https://hub.docker.com/r/selenwright/playwright-chromium) | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
 | `playwright-firefox` | Firefox | [`selenwright/playwright-firefox`](https://hub.docker.com/r/selenwright/playwright-firefox) | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
 | `playwright-webkit` | WebKit | [`selenwright/playwright-webkit`](https://hub.docker.com/r/selenwright/playwright-webkit) | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
+| `playwright-chrome` | Google Chrome | [`selenwright/playwright-chrome`](https://hub.docker.com/r/selenwright/playwright-chrome) | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
+| `playwright-msedge` | Microsoft Edge | [`selenwright/playwright-msedge`](https://hub.docker.com/r/selenwright/playwright-msedge) | 3000 (WS), 5900 (VNC), 9090 (clipboard) |
+
+## Supported Architectures
+
+| Browser | linux/amd64 | linux/arm64 |
+|---|---|---|
+| Chromium | yes | yes |
+| Firefox | yes | yes |
+| WebKit | yes | yes |
+| Google Chrome | yes | no |
+| Microsoft Edge | yes | no |
 
 ## Pull
 
@@ -18,15 +30,29 @@ Published images are available on [Docker Hub under `selenwright`](https://hub.d
 docker pull selenwright/playwright-chromium:latest
 docker pull selenwright/playwright-firefox:latest
 docker pull selenwright/playwright-webkit:latest
+docker pull selenwright/playwright-chrome:latest
+docker pull selenwright/playwright-msedge:latest
 ```
+
+## Tags
+
+Images are published for the latest two stable Playwright minor versions.
+
+Each image gets:
+
+- the full Playwright version tag, for example `1.58.0`
+- the Playwright minor tag, for example `1.58`
+- `latest` and `latest-release` for the newest discovered stable version
+
+Chromium, Firefox, and WebKit are pinned by the Playwright version tag. Google Chrome and Microsoft Edge images pin the Playwright version, while the branded browser binary follows the current stable package installed by Playwright during the image build.
 
 ## Build
 
 ```bash
-docker build -t playwright-chromium playwright-chromium/
+docker build -f playwright-chromium/Dockerfile -t playwright-chromium .
 
 # Specific Playwright version:
-docker build --build-arg PLAYWRIGHT_VERSION=1.58.0 -t playwright-chromium playwright-chromium/
+docker build -f playwright-chromium/Dockerfile --build-arg PLAYWRIGHT_VERSION=1.58.0 -t playwright-chromium .
 ```
 
 ## Run
@@ -50,6 +76,7 @@ await page.goto("https://example.com");
 ```
 
 Playwright client and server versions must match by major and minor version.
+Google Chrome and Microsoft Edge images use Playwright's `chromium` client.
 
 ## Clipboard
 
@@ -122,6 +149,8 @@ Images include a Docker healthcheck that waits for the Playwright server on `127
 | `PW_CHROMIUM_EXECUTABLE_PATH` | unset | Override Chromium executable path |
 | `PW_FIREFOX_EXECUTABLE_PATH` | unset | Override Firefox executable path |
 | `PW_WEBKIT_EXECUTABLE_PATH` | unset | Override WebKit executable path |
+| `PW_CHROME_EXECUTABLE_PATH` | unset | Override Google Chrome executable path |
+| `PW_MSEDGE_EXECUTABLE_PATH` | unset | Override Microsoft Edge executable path |
 
 ## Security
 
