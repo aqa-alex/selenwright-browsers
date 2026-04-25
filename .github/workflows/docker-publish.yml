@@ -158,6 +158,7 @@ jobs:
         env:
           BROWSER_TYPE: ${{ matrix.image.browser }}
           IMAGE: selenwright-smoke/${{ matrix.image.name }}:${{ matrix.image.platform_slug }}
+          PLATFORM: ${{ matrix.image.platform }}
           VERSION: ${{ needs.discover.outputs.latest }}
         run: |
           set -euo pipefail
@@ -165,12 +166,13 @@ jobs:
           npm install --no-save --no-package-lock "playwright-core@${VERSION}"
 
           docker run -d --name selenwright-smoke \
+            --platform "${PLATFORM}" \
             -p 127.0.0.1:3000:3000 \
             -p 127.0.0.1:9090:9090 \
             -e PW_HEADLESS=true \
             -e ENABLE_VNC=false \
             "${IMAGE}"
-          trap 'docker logs selenwright-smoke || true; docker rm -f selenwright-smoke || true' EXIT
+          trap 'docker logs selenwright-smoke || true; docker exec selenwright-smoke sh -lc "cat /tmp/clipboard.log /tmp/fluxbox.log /tmp/x11vnc.log 2>/dev/null || true" || true; docker rm -f selenwright-smoke || true' EXIT
 
           for attempt in $(seq 1 60); do
             status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke 2>/dev/null || true)
@@ -183,8 +185,16 @@ jobs:
           status=$(docker inspect --format '{{.State.Health.Status}}' selenwright-smoke)
           test "$status" = "healthy"
 
-          printf 'selenwright-smoke' | curl -fsS -X POST --data-binary @- http://127.0.0.1:9090/
-          test "$(curl -fsS http://127.0.0.1:9090/)" = "selenwright-smoke"
+          clipboard_ready=false
+          for attempt in $(seq 1 30); do
+            if printf 'selenwright-smoke' | curl -fsS -X POST --data-binary @- http://127.0.0.1:9090/ >/dev/null 2>&1 \
+              && [ "$(curl -fsS http://127.0.0.1:9090/ 2>/dev/null)" = "selenwright-smoke" ]; then
+              clipboard_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$clipboard_ready" = "true"
 
           node - <<'NODE'
           const { chromium, firefox, webkit } = require("playwright-core");
