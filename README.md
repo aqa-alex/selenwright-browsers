@@ -1,6 +1,19 @@
 # selenwright-browsers
 
-Docker images of Playwright browsers for [Selenwright](https://github.com/aqa-alex/selenwright). Two image families per browser: full images with X11/VNC/clipboard for headed debugging, and headless images without any X11 stack for lean CI use.
+Docker images of Playwright browsers for [Selenwright](https://github.com/aqa-alex/selenwright). These images are built for running browsers as remote Playwright services, not for running the test suite inside the same container.
+
+If your CI job only needs `npx playwright test` inside Docker, use the official [`mcr.microsoft.com/playwright`](https://mcr.microsoft.com/en-us/product/playwright/about) image. It is the right default for that workflow.
+
+Use `selenwright-browsers` when you want browsers to be infrastructure:
+
+- the test runner lives outside the browser container
+- each container exposes one Playwright browser server over WebSocket
+- full images provide headed debugging with X11, VNC, and clipboard support
+- headless images keep CI browser nodes smaller and simpler
+- each browser is packaged separately, so Chromium, Firefox, WebKit, Chrome, and Edge can be scaled or replaced independently
+- containers can be health-checked and orchestrated in a grid-like browser pool
+
+The images are based on the official Playwright image and add the remote-browser server layer, per-browser packaging, debug tooling, CI-oriented headless variants, and Selenwright metadata.
 
 Published images are available on [Docker Hub under `selenwright`](https://hub.docker.com/u/selenwright).
 
