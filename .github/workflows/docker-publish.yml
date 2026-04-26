@@ -18,28 +18,19 @@ jobs:
       versions: ${{ steps.versions.outputs.versions }}
       latest: ${{ steps.versions.outputs.latest }}
     steps:
-      - uses: docker/setup-buildx-action@v3
-
       - id: versions
         run: |
           set -euo pipefail
           VERSIONS_JSON=$(npm view playwright-core versions --json)
           STABLE=$(echo "$VERSIONS_JSON" | jq -r '.[] | select(test("^[0-9]+[.][0-9]+[.][0-9]+$"))')
 
-          can_build_from_image() {
+          can_pull_base_image() {
             local image="$1"
-            local tmpdir
-            local status
-            tmpdir="$(mktemp -d)"
-            printf 'FROM %s\n' "$image" > "${tmpdir}/Dockerfile"
-            docker buildx build \
-              --pull \
-              --platform linux/amd64,linux/arm64 \
-              --progress=plain \
-              "${tmpdir}"
-            status=$?
-            rm -rf "${tmpdir}"
-            return "${status}"
+            local platform
+            for platform in linux/amd64 linux/arm64; do
+              docker pull --quiet --platform "${platform}" "${image}" >/dev/null || return 1
+            done
+            docker image rm "${image}" >/dev/null 2>&1 || true
           }
 
           SELECTED=()
@@ -52,12 +43,12 @@ jobs:
 
             IMAGE="mcr.microsoft.com/playwright:v${VERSION}-noble"
             echo "Checking ${IMAGE}"
-            if can_build_from_image "${IMAGE}" >/dev/null 2>&1; then
+            if can_pull_base_image "${IMAGE}" >/dev/null 2>&1; then
               SELECTED+=("${VERSION}")
               SEEN_MINORS="${SEEN_MINORS} ${MINOR}"
               echo "Selected ${VERSION} for minor ${MINOR}"
             else
-              echo "Skipping ${VERSION}: BuildKit cannot resolve ${IMAGE}"
+              echo "Skipping ${VERSION}: Docker cannot pull ${IMAGE}"
             fi
 
             if [ "${#SELECTED[@]}" -eq 2 ]; then
