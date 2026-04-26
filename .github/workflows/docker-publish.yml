@@ -23,12 +23,37 @@ jobs:
           set -euo pipefail
           VERSIONS_JSON=$(npm view playwright-core versions --json)
           STABLE=$(echo "$VERSIONS_JSON" | jq -r '.[] | select(test("^[0-9]+[.][0-9]+[.][0-9]+$"))')
-          MINORS=$(echo "$STABLE" | awk -F. '{print $1"."$2}' | sort -Vu)
-          TOP=$(echo "$MINORS" | tail -2)
-          LATEST_MINOR=$(echo "$TOP" | tail -1)
-          PREV_MINOR=$(echo "$TOP" | head -1)
-          LATEST=$(echo "$STABLE" | grep "^${LATEST_MINOR}\." | sort -V | tail -1)
-          PREV=$(echo "$STABLE" | grep "^${PREV_MINOR}\." | sort -V | tail -1)
+
+          SELECTED=()
+          SEEN_MINORS=""
+          while IFS= read -r VERSION; do
+            MINOR="${VERSION%.*}"
+            if [[ " ${SEEN_MINORS} " == *" ${MINOR} "* ]]; then
+              continue
+            fi
+
+            IMAGE="mcr.microsoft.com/playwright:v${VERSION}-noble"
+            echo "Checking ${IMAGE}"
+            if docker manifest inspect "${IMAGE}" >/dev/null 2>&1; then
+              SELECTED+=("${VERSION}")
+              SEEN_MINORS="${SEEN_MINORS} ${MINOR}"
+              echo "Selected ${VERSION} for minor ${MINOR}"
+            else
+              echo "Skipping ${VERSION}: ${IMAGE} is not available"
+            fi
+
+            if [ "${#SELECTED[@]}" -eq 2 ]; then
+              break
+            fi
+          done < <(echo "$STABLE" | sort -Vr)
+
+          if [ "${#SELECTED[@]}" -lt 2 ]; then
+            echo "Could not find two Playwright versions with available mcr.microsoft.com/playwright:* -noble images" >&2
+            exit 1
+          fi
+
+          LATEST="${SELECTED[0]}"
+          PREV="${SELECTED[1]}"
           ARR=$(jq -nc --arg l "$LATEST" --arg p "$PREV" '[$l, $p]')
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           echo "versions=$ARR" >> "$GITHUB_OUTPUT"
