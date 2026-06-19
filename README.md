@@ -236,3 +236,5 @@ VNC starts without a password when `ENABLE_VNC=true`. Bind port `5900` only to t
 ## License
 
 Apache 2.0 - see [LICENSE](LICENSE).
+
+<!-- maintenance: ; -->
